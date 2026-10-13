@@ -130,8 +130,13 @@ METODOS = ["Filtrado por ítem", "Filtrado por cliente", "SVD (factores ocultos)
 with st.sidebar:
     st.header("Parámetros")
     metodo = st.selectbox("Método de recomendación", METODOS)
-    K = st.slider("Vecinos K (filtrado por cliente)", min_value=5, max_value=200, value=30, step=5)
-    n_factores = st.slider("Factores del SVD", min_value=2, max_value=20, value=8)
+    K = st.slider("Vecinos K (filtrado por cliente)", min_value=5, max_value=200, value=30, step=5,
+                  help="Solo cambia el método 'Filtrado por cliente' (y su fila en 'Comparar métodos').")
+    n_factores = st.slider("Factores del SVD", min_value=2, max_value=20, value=8,
+                           help="Solo cambia el método 'SVD' (y su fila en 'Comparar métodos').")
+    if metodo == "Filtrado por ítem" or metodo == "Popularidad":
+        st.caption("ℹ️ Con este método los sliders de K y de factores no cambian el top 3; "
+                   "sí cambian la pestaña 'Comparar métodos'.")
     respaldo = st.toggle("Usar popularidad para clientes SIN historial (arranque en frío)", value=True)
     st.divider()
     st.caption("Datos: 8,000 clientes · ~10 meses de historial · experimento de 90 días. "
@@ -140,7 +145,7 @@ with st.sidebar:
 tab1, tab2, tab3 = st.tabs(["Recomendar", "Comparar métodos", "Experimento A/B"])
 
 with tab1:
-    cid = st.number_input("ID de cliente", min_value=int(ids.min()), max_value=int(ids.max()), value=14, step=1)
+    cid = st.number_input("ID de cliente", min_value=int(ids.min()), max_value=int(ids.max()), value=7, step=1)
     fila = int(np.where(ids == cid)[0][0])
     x_vec = X[fila].copy()
     compro = [productos[j] for j in np.where(x_vec > 0)[0]]
@@ -168,6 +173,17 @@ with tab1:
         with col:
             st.metric(f"#{pos}", productos[j], f"puntaje {scores[j]:.2f}", delta_color="off")
             st.caption(porque(metodo_usado, j, x_vec, vec, K))
+
+    # Los 4 métodos lado a lado para ESTE cliente (con los parámetros de la barra lateral)
+    st.markdown("**¿Qué le recomendaría cada método a este cliente?**")
+    lado_a_lado = {}
+    for m in METODOS:
+        m_usado = "Popularidad" if (x_vec.sum() == 0 and respaldo) else m
+        sc, _ = puntajes(m_usado, x_vec, K, n_factores, fila)
+        lado_a_lado[m] = [productos[j] for j in top3(sc, x_vec)]
+    tabla_cliente = pd.DataFrame(lado_a_lado, index=["#1", "#2", "#3"]).T
+    st.dataframe(tabla_cliente.style.apply(
+        lambda r: ["font-weight: bold" if r.name == metodo else "" for _ in r], axis=1), width="stretch")
 
     probo = [productos[j] for j in np.where(NUEVO[fila] > 0)[0]]
     acierto = [productos[j] for j in recs if NUEVO[fila, j] > 0]
